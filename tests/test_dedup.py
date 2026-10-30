@@ -466,14 +466,17 @@ def test_one_maintenance_pass_at_a_time(monkeypatch, case, limits, running, clai
     assert ("library_maintenance" not in tasks.blocked_task_names(running)) is claimable
 
 
-@pytest.mark.parametrize("task,stub,args", [
-    ("handle_file_deleted_task", "delete_file_by_filepath", {"filepath": "/games/G.nsp"}),
-    ("remove_missing_files_task", "remove_missing_files_from_db", {}),
+@pytest.mark.parametrize("task,args", [
+    ("handle_file_deleted_task", {"filepath": "/games/G.nsp"}),
+    ("remove_missing_files_task", {}),
 ])
-def test_deletions_outside_ownfoil_run_maintenance(monkeypatch, task, stub, args):
-    """A file deleted by hand can free a "(n)" name just like one deleted by dedup."""
+def test_deletions_outside_ownfoil_run_maintenance(monkeypatch, env, task, args):
+    """A file deleted by hand can free a "(n)" name just like one deleted by dedup.
+
+    The row is now flagged instead of deleted, so the maintenance pass is what still
+    reclaims the name the vanished file held on disk.
+    """
     enqueued = []
-    monkeypatch.setattr(tasks, stub, lambda *a: None)
     monkeypatch.setattr(tasks, "enqueue_task", lambda name, data=None, **k: enqueued.append(name))
 
     getattr(tasks, task)(**args)

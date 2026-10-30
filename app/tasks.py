@@ -1384,6 +1384,9 @@ def handle_file_deleted_task(filepath, **kwargs):
     if file and not os.path.exists(filepath) and file.missing_since is None:
         file.missing_since = datetime.datetime.utcnow()
         db.session.commit()
+    # The row is kept, but the file is gone from disk: the name it held is free again.
+    enqueue_task('update_titles')
+    request_maintenance()
 
 
 @register_task('handle_dir_deleted')

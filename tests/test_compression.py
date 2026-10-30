@@ -784,8 +784,9 @@ def test_process_file_skips_a_stage_that_did_not_advance(env):
     assert "compress_file" in enqueued                      # still falls through to compression
 
 
-def test_process_file_deletes_row_when_file_vanished(env):
-    """A file gone from disk is dropped from the DB, and its app ownership released with it."""
+def test_process_file_keeps_row_when_file_vanished(env):
+    """A file gone from disk is flagged for review, not dropped: its app ownership and its
+    identification and verification history are kept until an admin purges it."""
     released = []
     env.monkeypatch.setattr(tasks, "remove_file_from_apps", lambda fid: released.append(fid))
     f = env.seed("Game.nsp")
@@ -794,8 +795,10 @@ def test_process_file_deletes_row_when_file_vanished(env):
 
     tasks.process_file_task(file_id=fid)
 
-    assert db.session.get(Files, fid) is None
-    assert released == [fid]
+    row = db.session.get(Files, fid)
+    assert row is not None
+    assert row.missing_since is not None
+    assert released == []
 
 
 def test_identify_stage_enqueues_title_expansion_top_level(env):
