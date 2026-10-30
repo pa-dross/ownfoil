@@ -33,8 +33,9 @@ SELECT * FROM
           COALESCE(SUM(identified), 0), COALESCE(SUM(identification_attempts), 0),
           COALESCE(SUM(download_count), 0),
           COUNT(signature_valid), COALESCE(SUM(signature_valid), 0),
-          COUNT(hash_valid), COALESCE(SUM(hash_valid), 0),
-          COUNT(hash_modified), COALESCE(SUM(hash_modified), 0)
+           COUNT(hash_valid), COALESCE(SUM(hash_valid), 0),
+           COUNT(hash_modified), COALESCE(SUM(hash_modified), 0),
+           COUNT(missing_since), COALESCE(SUM(CAST(strftime('%s', missing_since) AS INTEGER)), 0)
      FROM files),
   (SELECT COUNT(*), COALESCE(MAX(id), 0), COALESCE(SUM(completion_pct), 0),
           COALESCE(SUM(worker_id), 0),

@@ -16,6 +16,7 @@ RUN if [ "$TARGETPLATFORM" = "linux/arm/v6" ] || [ "$TARGETPLATFORM" = "linux/ar
 RUN mkdir /app
 COPY ./app /app
 COPY ./docker/run.sh /app/run.sh
+RUN sed -i 's/\r$//' /app/run.sh
 
 RUN mkdir -p /app/data
 

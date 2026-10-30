@@ -543,6 +543,21 @@ def set_library_watcher_settings_api():
     watcher.reconcile()
     return jsonify({'success': True, 'errors': []})
 
+
+@app.route('/api/settings/library/missing', methods=['GET', 'POST'])
+@access_required('admin')
+def missing_library_files_api():
+    from db import missing_file_count, purge_missing_files
+    if request.method == 'GET':
+        return jsonify({'count': missing_file_count()})
+    # Confirmation is deliberately separate from discovery and normal scans.
+    if not request.is_json or request.json.get('confirm') != 'purge missing files':
+        return jsonify({'error': 'Explicit confirmation required'}), 400
+    removed = purge_missing_files()
+    if removed:
+        tasks_mod.enqueue_task('update_titles')
+    return jsonify({'removed': removed, 'count': missing_file_count()})
+
 @app.post('/api/settings/library/management')
 @access_required('admin')
 def set_library_management_settings_api():

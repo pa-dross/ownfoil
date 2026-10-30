@@ -648,6 +648,12 @@ def scan_library_task(library_path, **kwargs):
     logger.info(f'Scanning library path {library_path} ...')
     _, files = titles_lib.get_dirs_and_files(library_path)
     skip = set(get_library_file_paths(library_id)) | get_temp_file_paths()
+    # A previously offline mount must recover its existing rows (and hash verdicts),
+    # not insert fresh rows when it reappears.
+    returned = set(files)
+    for file in Files.query.filter_by(library_id=library_id).filter(Files.missing_since.isnot(None)).all():
+        if file.filepath in returned:
+            handle_file_added_task(library_path, file.filepath)
     new_files = [f for f in files if f not in skip]
 
     if not new_files:
@@ -894,9 +900,9 @@ def process_file_task(file_id, **kwargs):
         if file is None:
             return
         if not os.path.exists(file.filepath):
-            logger.warning(f'File {file.filename} no longer exists, deleting from database.')
-            remove_file_from_apps(file_id)
-            Files.query.filter_by(id=file_id).delete(synchronize_session=False)
+            logger.warning(f'File {file.filename} is temporarily unavailable; keeping its database record.')
+            if file.missing_since is None:
+                file.missing_since = datetime.datetime.utcnow()
             db.session.commit()
             return
         mgmt = get_settings()['library']['management']
@@ -1346,6 +1352,9 @@ def handle_file_added_task(library_path, filepath, **kwargs):
 
     new_size = titles_lib.get_file_size(filepath)
     new_mtime = os.path.getmtime(filepath)
+    if file.missing_since is not None:
+        file.missing_since = None
+        db.session.commit()
     if file.size == new_size and file.mtime == new_mtime:
         return
 
@@ -1371,13 +1380,13 @@ def handle_file_moved_task(library_path, src_path, dest_path, **kwargs):
 
 @register_task('handle_file_deleted')
 def handle_file_deleted_task(filepath, **kwargs):
-    delete_file_by_filepath(filepath)
-    enqueue_task('update_titles')
-    request_maintenance()
+    file = Files.query.filter_by(filepath=filepath).first()
+    if file and not os.path.exists(filepath) and file.missing_since is None:
+        file.missing_since = datetime.datetime.utcnow()
+        db.session.commit()
 
 
 @register_task('handle_dir_deleted')
 def handle_dir_deleted_task(dirpath, **kwargs):
-    """A folder was moved out/removed: delete all its files from the library."""
-    if delete_files_under_dir(dirpath):
-        enqueue_task('update_titles')
+    """Retain file history when a directory disappears."""
+    delete_files_under_dir(dirpath)

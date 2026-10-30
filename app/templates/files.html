@@ -44,7 +44,7 @@
 
     {# Per view: what it lists, then the settings it depends on with their current values. #}
     <div class="files-status" data-tab="all">
-        <p>Every file in all libraries.</p>
+        <p>Every tracked file in all libraries. Missing files retain their verification history until purged in Settings.</p>
     </div>
     <div class="files-status" data-tab="unidentified">
         <p>Files Ownfoil could not match to any known content in the metadata database.</p>
@@ -142,7 +142,7 @@
     const FILE_FIELDS = `fragment F on File {
         id filename filepath folder extension size compressed organized multicontent libraryId
         identificationType identificationError identificationAttempts
-        verificationStatus verificationError verifiedAt addedAt
+        verificationStatus verificationError verifiedAt missingSince addedAt
         apps { appId appType appVersion displayVersion titleId title { name icon(size: THUMB) { url } } }
     }`;
 
@@ -268,6 +268,7 @@
         const shield = status === 'UNVERIFIED' ? ['bi-shield', 'files-off']
             : [BROKEN.includes(status) ? 'bi-shield-exclamation' : 'bi-shield-check', `files-fg-${STATUS_TONE[status]}`];
         return el('span', {className: 'files-state'},
+            r.missingSince ? icon('bi-exclamation-triangle-fill', 'files-fg-warning', 'Missing from library') : null,
             icon('bi-tag-fill', idTone, idTip),
             icon(shield[0], shield[1], `Verification: ${humanize(status)}`),
             icon('bi-file-earmark-zip', r.compressed ? 'files-fg-primary' : 'files-off', r.compressed ? 'Compressed' : 'Not compressed'),
@@ -461,7 +462,8 @@
     /** The actions that apply to a file, as buttons of the given class. */
     function actionButtons(f, className, label) {
         return Object.entries(ACTIONS).filter(([, a]) => !a.applies || a.applies(f)).map(([name, a]) => {
-            const blocked = a.blocked && a.blocked();
+            const blocked = f.missingSince ? 'File is missing; restore it or purge its database entry in Settings'
+                : a.blocked && a.blocked();
             const b = el('button', {type: 'button', className: className + (a.danger ? ' files-fg-danger' : ''),
                                     title: blocked || '', disabled: Boolean(blocked)},
                          el('i', {className: `bi ${a.icon} ${label ? 'me-2' : ''}`}), label ? a.title : null);
@@ -608,7 +610,8 @@
 
     // tile -> stats -> [count, subtitle, tone when there is something], or null while unknown.
     const TILES = {
-        all: s => s.totalFiles != null && [s.totalFiles, formatBytes(s.totalSize)],
+        all: s => s.totalFiles != null && [s.totalFiles,
+            `${formatBytes(s.totalSize)}${s.missingFiles ? ` (${s.missingFiles.toLocaleString()} missing)` : ''}`],
         unidentified: s => s.unidentifiedFiles != null && [s.unidentifiedFiles, 'Unknown content', 'warning'],
         // A failure outranks a file not checked yet: red if anything failed, yellow otherwise.
         verification: s => {
@@ -644,6 +647,10 @@
         [CHEAP_STATS, COSTLY_STATS].forEach(q => gql(q)
             .then(d => { stats = {...stats, ...d.stats}; paintTiles(); })
             .catch(e => notice(e.message)));
+        fetch('/api/settings/library/missing', {credentials: 'same-origin'})
+            .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
+            .then(d => { stats.missingFiles = d.count; paintTiles(); })
+            .catch(e => notice(e.message));
     }
 
     // --- filters ---
@@ -819,6 +826,7 @@
                 el('div', {className: 'files-row-lines'},
                     line('files-row-title', titled ? titleName(r) : r.filename),
                     line('files-row-content', contentText(r)),
+                    r.missingSince ? el('div', {className: 'files-fg-warning small', textContent: 'Missing'}) : null,
                     line('files-row-sub', sub)))),
             el('td', {className: 'files-wide'}, stateIcons(r)),
             el('td', {className: 'text-end files-num'}, formatBytes(r.size)),
@@ -957,6 +965,8 @@
                                                  textContent: f.verificationError.replaceAll('; >', '\n>')}) : null,
                 verified ? el('div', {className: 'small text-secondary'}, 'Checked ', when(verified)) : null),
             section('File', el('dl', {className: 'files-kv'},
+                el('dt', null, 'Availability'), el('dd', null, f.missingSince ?
+                    el('span', {className: 'files-fg-warning'}, 'Missing since ', when(parseDate(f.missingSince, true))) : 'Present'),
                 el('dt', null, 'Name'), el('dd', null, f.filename),
                 el('dt', null, 'Path'), el('dd', null, pathParts(f)),
                 el('dt', null, 'Format'), el('dd', null, `${f.extension}${f.compressed ? ', compressed' : ''}`),

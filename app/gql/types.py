@@ -336,6 +336,10 @@ class File:
     verified_at: Optional[str] = desc(
         "When verification last ran. The verdicts describe the bytes as of then; a "
         "change on disk clears all four fields.", default=None)
+    missing_since: Optional[str] = desc(
+        "When the file was first observed absent from its library. Null when present; "
+        "its identification and verification history is retained until an admin purges it.",
+        default=None)
     mtime: Optional[float] = desc(
         "Filesystem modification time, Unix epoch seconds. Rewritten by a copy or a "
         "re-organize, so it is not a reliable 'when did I get this'.", default=None)

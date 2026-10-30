@@ -101,7 +101,8 @@ f.identification_attempts AS identification_attempts,
 f.organized AS organized, f.signature_valid AS signature_valid,
 f.hash_valid AS hash_valid, f.hash_modified AS hash_modified,
 f.verification_error AS verification_error,
-f.verified_at AS verified_at, f.mtime AS mtime, f.added_at AS added_at
+f.verified_at AS verified_at, f.missing_since AS missing_since,
+f.mtime AS mtime, f.added_at AS added_at
 """
 
 # `titledb.titles` already holds one row per id, merged across the metadata sources by
@@ -230,6 +231,7 @@ def _build_file(row, *, include_filepath: bool) -> File:
         hash_modified=None if row.hash_modified is None else bool(row.hash_modified),
         verification_error=row.verification_error,
         verified_at=_iso(row.verified_at),
+        missing_since=_iso(row.missing_since),
         mtime=row.mtime,
         added_at=_iso(row.added_at),
     )

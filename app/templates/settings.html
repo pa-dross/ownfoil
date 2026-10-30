@@ -138,6 +138,16 @@
                     </table>
                 </div>
 
+                <div class="card border-warning my-3">
+                    <div class="card-body">
+                        <h3 class="h5">Missing library files</h3>
+                        <p>Missing files are kept in the database with their verification history. If a mount is offline, restore it and scan before purging.</p>
+                        <p id="missingFileCount">Loading missing file count…</p>
+                        <button type="button" class="btn btn-outline-secondary" onclick="loadMissingFileCount()">Refresh count</button>
+                        <button type="button" class="btn btn-danger" onclick="purgeMissingFiles()">Purge still-missing files</button>
+                    </div>
+                </div>
+
                 <div class="alert alert-danger d-none" id="pathsAlert" role="alert"></div>
 
                 <!-- Library buttons -->
@@ -716,6 +726,33 @@
     }
 
     loadFileStats();
+
+    async function loadMissingFileCount() {
+        try {
+            const response = await fetch('/api/settings/library/missing', {credentials: 'same-origin'});
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            const data = await response.json();
+            $('#missingFileCount').text(`${data.count} file(s) awaiting review`);
+        } catch (error) {
+            $('#missingFileCount').text(`Unable to load missing files: ${error.message}`);
+        }
+    }
+
+    async function purgeMissingFiles() {
+        if (!confirm('Delete database entries for files that are still missing? Restore offline mounts before continuing.')) return;
+        const response = await fetch('/api/settings/library/missing', {
+            method: 'POST', credentials: 'same-origin',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({confirm: 'purge missing files'}),
+        });
+        if (!response.ok) {
+            alert(`Purge failed: HTTP ${response.status}`);
+            return;
+        }
+        const data = await response.json();
+        alert(`Removed ${data.removed} database entries. No files on disk were deleted.`);
+        loadMissingFileCount();
+    }
 
     async function scanLibrary(path = null) {
         $('.scanBtn').prop('disabled', true);
@@ -1538,6 +1575,8 @@
         // The figures are a live scan of the store, so they are read when asked for rather
         // than on every settings page load.
         $('#mediaUsage').on('show.bs.collapse', fillMediaUsage);
+
+        loadMissingFileCount();
 
         // Add real-time password validation
         $('#inputNewUserPassword').on('input', function() {

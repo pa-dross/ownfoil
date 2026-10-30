@@ -147,6 +147,7 @@ class Files(db.Model):
     hash_modified = db.Column(db.Boolean)
     verification_error = db.Column(db.String)
     verified_at = db.Column(db.DateTime)
+    missing_since = db.Column(db.DateTime)
     mtime = db.Column(db.Float)
     # When ownfoil first saw the file. Distinct from mtime, which a re-organize or a
     # copy rewrites - only this one can answer "recently added".
@@ -726,11 +727,11 @@ def _dir_prefix_like(dirpath):
     return escaped + os.sep.replace('\\', '\\\\') + '%'
 
 def delete_files_under_dir(dirpath):
-    """Delete all library files under a directory (folder moved out/removed). Returns count."""
+    """Mark all library files under a missing directory for manual review."""
     files = Files.query.filter(Files.filepath.like(_dir_prefix_like(dirpath), escape='\\')).all()
     for f in files:
-        remove_file_from_apps(f.id)
-        db.session.delete(f)
+        if f.missing_since is None:
+            f.missing_since = datetime.datetime.utcnow()
     db.session.commit()
     return len(files)
 
@@ -761,18 +762,31 @@ def delete_file_by_filepath(filepath):
         logger.error(f"An error occurred while removing the file path: {str(e)}")
 
 def remove_missing_files_from_db():
-    """Bulk-delete Files rows whose path no longer exists on disk; recompute affected app ownership."""
-    missing = [f for f in Files.query.all() if not os.path.exists(f.filepath)]
-    if not missing:
-        return
-    affected_apps = {a for f in missing for a in f.apps}
+    """Flag absent files without discarding identification and verification history."""
+    missing = [f for f in Files.query.all() if f.missing_since is None and not os.path.exists(f.filepath)]
     for f in missing:
+        f.missing_since = datetime.datetime.utcnow()
+    db.session.commit()
+    if missing:
+        logger.warning(f"Marked {len(missing)} files as missing; review them in Settings before purging.")
+
+
+def missing_file_count():
+    return Files.query.filter(Files.missing_since.isnot(None)).count()
+
+
+def purge_missing_files():
+    """Purge only still-absent files; never remove rows for files that came back."""
+    missing = Files.query.filter(Files.missing_since.isnot(None)).all()
+    to_delete = [f for f in missing if not os.path.exists(f.filepath)]
+    affected_apps = {a for f in to_delete for a in f.apps}
+    for f in to_delete:
         db.session.delete(f)
     db.session.flush()
     for app in affected_apps:
         app.owned = len(app.files) > 0
     db.session.commit()
-    logger.info(f"Removed {len(missing)} missing files from database.")
+    return len(to_delete)
 
 def increment_download_count(filepath):
     """Increment the download count for a file by filepath"""
