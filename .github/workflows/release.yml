@@ -5,7 +5,7 @@ on:
 
 jobs:
   issues:
-    if: '!github.event.release.prerelease'
+    if: github.repository == 'a1ex4/ownfoil' && !github.event.release.prerelease
     runs-on: ubuntu-latest
     permissions:
       issues: write
@@ -33,7 +33,7 @@ jobs:
   # Every release opens release/X.Y for its patches if missing and moves it to the next patch.
   # A minor release (X.Y.0) comes from develop, which moves on to the next minor.
   branches:
-    if: '!github.event.release.prerelease'
+    if: github.repository == 'a1ex4/ownfoil' && !github.event.release.prerelease
     runs-on: ubuntu-latest
     concurrency: release-branches
     steps:

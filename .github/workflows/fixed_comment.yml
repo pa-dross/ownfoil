@@ -5,7 +5,7 @@ on:
 
 jobs:
   comment:
-    if: github.event.label.name == 'fixed'
+    if: github.repository == 'a1ex4/ownfoil' && github.event.label.name == 'fixed'
     runs-on: ubuntu-latest
     permissions:
       issues: write

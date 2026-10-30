@@ -6,6 +6,7 @@ on:
 
 jobs:
   stale:
+    if: github.repository == 'a1ex4/ownfoil'
     runs-on: ubuntu-latest
     steps:
       - name: Close stale issues

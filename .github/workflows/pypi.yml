@@ -8,6 +8,7 @@ on:
 
 jobs:
   build_and_publish:
+    if: github.repository == 'a1ex4/ownfoil'
     name: Build and publish to PyPI
     runs-on: ubuntu-latest
     environment: pypi
